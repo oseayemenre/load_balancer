@@ -1,0 +1,18 @@
+services:
+  load_balancer:
+    build: .
+    image: practice-load-balancer:latest
+    ports: [3000:3000]
+    volumes: [".:/app"]
+  test_server_1:
+    image: practice-load-balancer-server:latest
+    environment:
+      - PORT=3001
+  test_server_2:
+    image: practice-load-balancer-server:latest
+    environment:
+      - PORT=3002
+  test_server_3:
+    image: practice-load-balancer-server:latest
+    environment:
+      - PORT=3003

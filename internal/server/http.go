@@ -10,20 +10,20 @@ import (
 )
 
 var (
-	servers = []string{"localhost:3001", "localhost:3002", "localhost:3003"}
+	servers = []string{"http://test_server_1:3001", "http://test_server_2:3002", "http://test_server_3:3003"}
 	index   = 0
 	mu      = sync.Mutex{}
 )
 
 func RegisterRoutes(r *chi.Mux) {
-	r.HandleFunc("*", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var req *http.Request
 		var err error
 
 		mu.Lock()
 		current := index
 		index = (index + 1) % len(servers)
-		target := servers[current]
+		target := fmt.Sprintf("%s%s", servers[current], r.RequestURI)
 		mu.Unlock()
 
 		if r.Body != nil {
@@ -52,11 +52,11 @@ func RegisterRoutes(r *chi.Mux) {
 			return
 		}
 
-		writeJSON(w, resp.StatusCode, parsed)
+		writeResponse(w, resp.StatusCode, parsed)
 	})
 }
 
-func writeJSON(w http.ResponseWriter, code int, data []byte) {
+func writeResponse(w http.ResponseWriter, code int, data []byte) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(data)
