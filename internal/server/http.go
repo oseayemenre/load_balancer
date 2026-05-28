@@ -9,13 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-var (
-	servers = []string{"http://test_server_1:3001", "http://test_server_2:3002", "http://test_server_3:3003"}
-	index   = 0
-	mu      = sync.Mutex{}
-)
-
-func RegisterRoutes(r *chi.Mux) {
+func RegisterRoutes(r *chi.Mux, servers []string, index int, mu *sync.Mutex) {
 	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var req *http.Request
 		var err error

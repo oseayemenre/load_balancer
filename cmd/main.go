@@ -7,12 +7,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
 	"github.com/oseayemenre/load_balancer/internal/config"
 	"github.com/oseayemenre/load_balancer/internal/server"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -32,7 +35,11 @@ func run() error {
 	}
 
 	router := chi.NewRouter()
-	server.RegisterRoutes(router)
+	servers, err := readServersFromYAMLConfig()
+	if err != nil {
+		return err
+	}
+	server.RegisterRoutes(router, servers, 0, &sync.Mutex{})
 
 	svr := http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
@@ -61,4 +68,27 @@ func run() error {
 	}
 
 	return nil
+}
+
+type serversConfig struct {
+	Servers []string `yaml:"servers"`
+}
+
+func readServersFromYAMLConfig() ([]string, error) {
+	file, err := os.Open(filepath.Join("config.yml"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, errors.New("yml config file not found")
+		}
+	}
+
+	config := &serversConfig{}
+
+	decoder := yaml.NewDecoder(file)
+	decoder.KnownFields(true)
+	if err := decoder.Decode(config); err != nil {
+		return nil, fmt.Errorf("error decoding config, %v", err)
+	}
+
+	return config.Servers, nil
 }
