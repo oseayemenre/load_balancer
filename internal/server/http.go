@@ -9,15 +9,32 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func RegisterRoutes(r *chi.Mux, servers []string, index int, mu *sync.Mutex) {
+type LbConfig struct {
+	Servers []LbServersConfig `yaml:"servers"`
+}
+
+type LbServersConfig struct {
+	Server string `yaml:"server"`
+	Weight int    `yaml:"weight"`
+}
+
+func RegisterRoutes(r *chi.Mux, servers []LbServersConfig, index, weightCount int, mu *sync.Mutex) {
 	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var req *http.Request
 		var err error
 
 		mu.Lock()
 		current := index
-		index = (index + 1) % len(servers)
-		target := fmt.Sprintf("%s%s", servers[current], r.RequestURI)
+		if servers[current].Weight == 0 {
+			servers[current].Weight = 1
+		}
+		target := fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
+		if weightCount == servers[current].Weight {
+			weightCount = 1
+			index = (index + 1) % len(servers)
+		} else {
+			weightCount++
+		}
 		mu.Unlock()
 
 		if r.Body != nil {

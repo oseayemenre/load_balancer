@@ -40,7 +40,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server.RegisterRoutes(router, servers, 0, &sync.Mutex{})
+	server.RegisterRoutes(router, servers, 0, 1, &sync.Mutex{})
 
 	svr := http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
@@ -71,11 +71,7 @@ func run() error {
 	return nil
 }
 
-type serversConfig struct {
-	Servers []string `yaml:"servers"`
-}
-
-func readServersFromYAMLConfig() ([]string, error) {
+func readServersFromYAMLConfig() ([]server.LbServersConfig, error) {
 	file, err := os.Open(filepath.Join("config.yml"))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -83,7 +79,7 @@ func readServersFromYAMLConfig() ([]string, error) {
 		}
 	}
 
-	config := &serversConfig{}
+	config := &server.LbConfig{}
 
 	decoder := yaml.NewDecoder(file)
 	decoder.KnownFields(true)
