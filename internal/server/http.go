@@ -25,9 +25,6 @@ func RegisterRoutes(r *chi.Mux, servers []LbServersConfig, index, weightCount in
 
 		mu.Lock()
 		current := index
-		if servers[current].Weight == 0 {
-			servers[current].Weight = 1
-		}
 		target := fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
 		if weightCount == servers[current].Weight {
 			weightCount = 1

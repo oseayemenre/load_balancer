@@ -77,7 +77,9 @@ func readServersFromYAMLConfig() ([]server.LbServersConfig, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, errors.New("yml config file not found")
 		}
+		return nil, err
 	}
+	defer file.Close()
 
 	config := &server.LbConfig{}
 
@@ -85,6 +87,12 @@ func readServersFromYAMLConfig() ([]server.LbServersConfig, error) {
 	decoder.KnownFields(true)
 	if err := decoder.Decode(config); err != nil {
 		return nil, fmt.Errorf("error decoding config, %v", err)
+	}
+
+	for i := range config.Servers {
+		if config.Servers[i].Weight <= 0 {
+			config.Servers[i].Weight = 1
+		}
 	}
 
 	return config.Servers, nil
