@@ -2,7 +2,9 @@ package server
 
 import (
 	"fmt"
+	"hash/fnv"
 	"io"
+	"net"
 	"net/http"
 	"sync"
 
@@ -18,34 +20,53 @@ type LbServersConfig struct {
 	Weight int    `yaml:"weight"`
 }
 
-func RegisterRoutes(r *chi.Mux, servers []LbServersConfig, index, weightCount int, mu *sync.Mutex) {
+func RegisterRoutes(
+	r *chi.Mux,
+	servers []LbServersConfig,
+	index, weightCount int,
+	mu *sync.Mutex,
+	algo string) {
 	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var req *http.Request
 		var err error
+		var target string
+		var current int
 
-		mu.Lock()
-		current := index
-		target := fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
-		if weightCount == servers[current].Weight {
-			weightCount = 1
-			index = (index + 1) % len(servers)
-		} else {
-			weightCount++
+		switch algo {
+		case "ip hash":
+			h := fnv.New32a()
+			ip, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("error splitting host port, %v", err), http.StatusBadRequest)
+				return
+			}
+			h.Write([]byte(ip))
+			current = int(h.Sum32()) % len(servers)
+			target = fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
+
+		default:
+			mu.Lock()
+			current = index
+			target = fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
+			if weightCount == servers[current].Weight {
+				weightCount = 1
+				index = (index + 1) % len(servers)
+			} else {
+				weightCount++
+			}
+			mu.Unlock()
 		}
-		mu.Unlock()
 
 		if r.Body != nil {
 			req, err = http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		} else {
 			req, err = http.NewRequestWithContext(r.Context(), r.Method, target, nil)
 		}
-
-		req.Header = r.Header.Clone()
-
 		if err != nil {
 			http.Error(w, fmt.Sprintf("error building request, %v", err), http.StatusInternalServerError)
 			return
 		}
+		req.Header = r.Header.Clone()
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -60,12 +81,14 @@ func RegisterRoutes(r *chi.Mux, servers []LbServersConfig, index, weightCount in
 			return
 		}
 
-		writeResponse(w, resp.StatusCode, parsed)
+		writeResponse(w, resp.StatusCode, resp.Header, parsed)
 	})
 }
 
-func writeResponse(w http.ResponseWriter, code int, data []byte) {
-	w.Header().Set("Content-Type", "application/json")
+func writeResponse(w http.ResponseWriter, code int, header http.Header, data []byte) {
+	for k, v := range header {
+		w.Header()[k] = v
+	}
 	w.WriteHeader(code)
 	w.Write(data)
 }

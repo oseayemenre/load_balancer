@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -35,12 +36,15 @@ func run() error {
 		return err
 	}
 
+	algo := flag.String("algo", "", "load balancer alogrithm")
+	flag.Parse()
+
 	router := chi.NewRouter()
 	servers, err := readServersFromYAMLConfig()
 	if err != nil {
 		return err
 	}
-	server.RegisterRoutes(router, servers, 0, 1, &sync.Mutex{})
+	server.RegisterRoutes(router, servers, 0, 1, &sync.Mutex{}, *algo)
 
 	svr := http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
