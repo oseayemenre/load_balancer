@@ -67,6 +67,7 @@ func RegisterRoutes(
 			return
 		}
 		req.Header = r.Header.Clone()
+		req.Header.Set("X-Forwarded-For", r.RemoteAddr)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
