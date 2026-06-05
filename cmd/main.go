@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,7 +43,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server.RegisterRoutes(router, servers, 0, 1, &sync.Mutex{}, *algo)
+	server.RegisterRoutes(router, servers, *algo)
 
 	svr := http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),

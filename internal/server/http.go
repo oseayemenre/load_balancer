@@ -16,16 +16,21 @@ type LbConfig struct {
 }
 
 type LbServersConfig struct {
-	Server string `yaml:"server"`
-	Weight int    `yaml:"weight"`
+	Server      string `yaml:"server"`
+	Weight      int    `yaml:"weight"`
+	Connections int
 }
 
 func RegisterRoutes(
 	r *chi.Mux,
 	servers []LbServersConfig,
-	index, weightCount int,
-	mu *sync.Mutex,
 	algo string) {
+	var (
+		index       int
+		weightCount = 1
+		mu          sync.Mutex
+	)
+
 	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var req *http.Request
 		var err error
@@ -44,6 +49,22 @@ func RegisterRoutes(
 			current = int(h.Sum32()) % len(servers)
 			target = fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
 
+		case "least connection":
+			mu.Lock()
+			for i := range servers {
+				if servers[i].Connections < servers[current].Connections {
+					current = i
+				}
+			}
+			servers[current].Connections++
+			target = fmt.Sprintf("%s%s", servers[current].Server, r.RequestURI)
+			mu.Unlock()
+
+			defer func() {
+				mu.Lock()
+				servers[current].Connections--
+				mu.Unlock()
+			}()
 		default:
 			mu.Lock()
 			current = index
