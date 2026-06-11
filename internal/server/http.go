@@ -38,28 +38,29 @@ func RegisterRoutes(
 
 		switch algo {
 		case "ip hash":
-			current, target, err = ipHash(r.RemoteAddr, servers, r.RequestURI)
+			target, err = ipHash(r.RemoteAddr, servers)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
 		case "least connection":
-			target = leastConnection(&mu, servers, r.RequestURI, current)
+			target = leastConnection(&mu, servers, current)
 			defer func() {
 				mu.Lock()
 				servers[current].Connections--
 				mu.Unlock()
 			}()
 		default:
-			current, weightCount, target = roundrobin(&mu, servers, current, r.RequestURI, weightCount)
+			current, weightCount, target = roundrobin(&mu, servers, current, weightCount)
 		}
 
+		url := fmt.Sprintf("%s%s", target, r.RequestURI)
 		switch r.Method {
 		case http.MethodGet, http.MethodDelete, http.MethodOptions:
-			req, err = http.NewRequestWithContext(r.Context(), r.Method, target, nil)
+			req, err = http.NewRequestWithContext(r.Context(), r.Method, url, nil)
 		default:
-			req, err = http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
+			req, err = http.NewRequestWithContext(r.Context(), r.Method, url, r.Body)
 		}
 
 		if err != nil {
@@ -86,9 +87,9 @@ func RegisterRoutes(
 	})
 }
 
-func roundrobin(mu *sync.Mutex, servers []LbServersConfig, current int, requestURI string, weightCount int) (int, int, string) {
+func roundrobin(mu *sync.Mutex, servers []LbServersConfig, current int, weightCount int) (int, int, string) {
 	mu.Lock()
-	target := fmt.Sprintf("%s%s", servers[current].Server, requestURI)
+	target := servers[current].Server
 	if weightCount == servers[current].Weight {
 		weightCount = 1
 		current = (current + 1) % len(servers)
@@ -99,19 +100,18 @@ func roundrobin(mu *sync.Mutex, servers []LbServersConfig, current int, requestU
 	return current, weightCount, target
 }
 
-func ipHash(remoteAddr string, servers []LbServersConfig, requestURI string) (int, string, error) {
+func ipHash(remoteAddr string, servers []LbServersConfig) (string, error) {
 	h := fnv.New32a()
 	ip, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return 0, "", fmt.Errorf("error splitting host port, %v", err)
+		return "", fmt.Errorf("error splitting host port, %v", err)
 	}
 	h.Write([]byte(ip))
 	current := int(h.Sum32()) % len(servers)
-	target := fmt.Sprintf("%s%s", servers[current].Server, requestURI)
-	return current, target, nil
+	return servers[current].Server, nil
 }
 
-func leastConnection(mu *sync.Mutex, servers []LbServersConfig, requestURI string, current int) string {
+func leastConnection(mu *sync.Mutex, servers []LbServersConfig, current int) string {
 	mu.Lock()
 	for i := range servers {
 		if servers[i].Connections/servers[i].Weight < servers[current].Connections/servers[current].Weight {
@@ -120,8 +120,7 @@ func leastConnection(mu *sync.Mutex, servers []LbServersConfig, requestURI strin
 	}
 	servers[current].Connections++
 	mu.Unlock()
-	target := fmt.Sprintf("%s%s", servers[current].Server, requestURI)
-	return target
+	return servers[current].Server
 
 }
 
