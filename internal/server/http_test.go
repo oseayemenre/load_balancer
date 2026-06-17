@@ -201,6 +201,41 @@ func TestProxyRequestIPHash(t *testing.T) {
 	}
 }
 
+func TestProxyRequestLeastConnection(t *testing.T) {
+	started := make(chan struct{})
+	ch := make(chan struct{})
+	svr1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(started)
+		<-ch
+	}))
+	svr2 := setFakeServer(t, "server 2")
+
+	servers := []LbServersConfig{
+		{
+			Server: svr1.URL,
+			Weight: 1,
+		},
+		{
+			Server: svr2.URL,
+			Weight: 1,
+		},
+	}
+
+	r := chi.NewRouter()
+	RegisterRoutes(r, servers, "least connection")
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w1 := httptest.NewRecorder()
+	w2 := httptest.NewRecorder()
+
+	go r.ServeHTTP(w1, req)
+	<-started
+	r.ServeHTTP(w2, req)
+
+	if w2.Body.String() != "server 2" {
+		t.Fatalf("expected server 2 got %v", w2.Body.String())
+	}
+}
+
 func setFakeServer(t *testing.T, message string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
