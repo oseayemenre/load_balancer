@@ -139,7 +139,9 @@ func TestWriteResponse(t *testing.T) {
 
 func TestProxyRequestRoundRobin(t *testing.T) {
 	svr1 := setFakeServer(t, "server 1")
+	defer svr1.Close()
 	svr2 := setFakeServer(t, "server 2")
+	defer svr2.Close()
 
 	servers := []LbServersConfig{
 		{
@@ -176,7 +178,9 @@ func TestProxyRequestRoundRobin(t *testing.T) {
 
 func TestProxyRequestIPHash(t *testing.T) {
 	svr1 := setFakeServer(t, "server 1")
+	defer svr1.Close()
 	svr2 := setFakeServer(t, "server 2")
+	defer svr2.Close()
 
 	servers := []LbServersConfig{
 		{
@@ -208,7 +212,9 @@ func TestProxyRequestLeastConnection(t *testing.T) {
 		close(started)
 		<-ch
 	}))
+	defer svr1.Close()
 	svr2 := setFakeServer(t, "server 2")
+	defer svr2.Close()
 
 	servers := []LbServersConfig{
 		{
