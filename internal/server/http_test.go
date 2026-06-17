@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func TestRoundRobin(t *testing.T) {
@@ -133,6 +135,56 @@ func TestWriteResponse(t *testing.T) {
 	if w.Body.String() != "test" {
 		t.Fatalf("expected test got %s", w.Body.String())
 	}
+}
+
+func TestProxyRequestRoundRobin(t *testing.T) {
+	svr1 := setFakeServer(t, "server 1")
+	svr2 := setFakeServer(t, "server 2")
+
+	servers := []LbServersConfig{
+		{
+			Server: svr1.URL,
+			Weight: 2,
+		},
+		{
+			Server: svr2.URL,
+			Weight: 1,
+		},
+	}
+
+	r := chi.NewRouter()
+	RegisterRoutes(r, servers, "round robin")
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w1 := httptest.NewRecorder()
+	r.ServeHTTP(w1, req)
+	if w1.Body.String() != "server 1" {
+		t.Fatalf("expected server 1, got %v", w1.Body.String())
+	}
+
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+	if w2.Body.String() != "server 1" {
+		t.Fatalf("expected server 1, got %v", w2.Body.String())
+	}
+
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, req)
+	if w3.Body.String() != "server 2" {
+		t.Fatalf("expected server 2, got %v", w3.Body.String())
+	}
+}
+
+func setFakeServer(t *testing.T, message string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected http method to be %s, got %s", http.MethodGet, r.Method)
+		}
+		if r.Header.Get("X-Forwarded-For") == "" {
+			t.Fatalf("expected X-Forwarded-For header to be set")
+		}
+		w.Write([]byte(message))
+	}))
 }
 
 func hash(t *testing.T, server string) int {
