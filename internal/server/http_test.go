@@ -174,6 +174,33 @@ func TestProxyRequestRoundRobin(t *testing.T) {
 	}
 }
 
+func TestProxyRequestIPHash(t *testing.T) {
+	svr1 := setFakeServer(t, "server 1")
+	svr2 := setFakeServer(t, "server 2")
+
+	servers := []LbServersConfig{
+		{
+			Server: svr1.URL,
+		},
+		{
+			Server: svr2.URL,
+		},
+	}
+
+	r := chi.NewRouter()
+	RegisterRoutes(r, servers, "ip hash")
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.RemoteAddr = "10.0.0.1:2134"
+	w1 := httptest.NewRecorder()
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w1, req)
+	r.ServeHTTP(w2, req)
+
+	if w2.Body.String() != w1.Body.String() {
+		t.Fatal("expected requests to go to the same backend")
+	}
+}
+
 func setFakeServer(t *testing.T, message string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
